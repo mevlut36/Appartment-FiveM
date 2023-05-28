@@ -9,6 +9,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Appartment.Server
 {
@@ -25,11 +26,9 @@ namespace Appartment.Server
             if (state == "enter")
             {
                 SetPlayerRoutingBucket(player.Handle, id);
-                Debug.WriteLine($"Le joueur {player.Name} est entré dans l'appart {id}");
             } else if (state == "exit")
             {
                 SetPlayerRoutingBucket(player.Handle, 0);
-                Debug.WriteLine($"Le joueur {player.Name} est sorti de l'appart {id}");
             }
             else
             {
@@ -38,36 +37,30 @@ namespace Appartment.Server
             }
         }
 
-        [EventHandler("appart:isMyAppart")]
-        public void GetPlayerServerId([FromSource] Player player, int id)
-        {
-            GetPlayerIdentifier(player.Handle, id);
-        }
-
-        [EventHandler("appart:addAppart")]
-        public void AddAppart([FromSource] Player player, Vector3 PosEnter, Vector3 PosExit)
+        [EventHandler("appart:addProperty")]
+        public void AddProperty([FromSource] Player player, Vector3 PosEnter, Vector3 PosExit)
         {
             using (var dbContext = new AppartContext())
             {
-                var newAppartment = new AppartmentTable
+                var newProperty = new PropertyTable
                 {
                     Doors_position = $"[[{PosEnter.X}, {PosEnter.Y}, {PosEnter.Z}], [{PosExit.X}, {PosExit.Y}, {PosExit.Z}]]"
                 };
 
-                dbContext.Appartment.Add(newAppartment);
+                dbContext.Property.Add(newProperty);
                 dbContext.SaveChanges();
             }
         }
 
-        [EventHandler("appart:deleteAppart")]
-        public void DeleteAppart([FromSource] Player player, int appartId)
+        [EventHandler("appart:deleteProperty")]
+        public void DeleteAppart([FromSource] Player player, int propertyId)
         {
             using (var dbContext = new AppartContext())
             {
-                var appartment = dbContext.Appartment.FirstOrDefault(a => a.Id_appart == appartId);
-                if (appartment != null)
+                var property = dbContext.Property.FirstOrDefault(a => a.Id_property == propertyId);
+                if (property != null)
                 {
-                    dbContext.Appartment.Remove(appartment);
+                    dbContext.Property.Remove(property);
                     dbContext.SaveChanges();
                 }
             }
@@ -78,13 +71,13 @@ namespace Appartment.Server
         {
             using (var dbContext = new AppartContext())
             {
-                List<AppartmentTable> appartments = dbContext.Appartment.ToList();
+                List<PropertyTable> properties = dbContext.Property.ToList();
                 List<Vector3> posEnterList = new List<Vector3>();
                 List<Vector3> posExitList = new List<Vector3>();
 
-                foreach (var appartment in appartments)
+                foreach (var property in properties)
                 {
-                    var doorsPosition = JsonConvert.DeserializeObject<List<List<double>>>(appartment.Doors_position);
+                    var doorsPosition = JsonConvert.DeserializeObject<List<List<double>>>(property.Doors_position);
                     var posEnter = new Vector3((float)doorsPosition[0][0], (float)doorsPosition[0][1], (float)doorsPosition[0][2]);
                     var posExit = new Vector3((float)doorsPosition[1][0], (float)doorsPosition[1][1], (float)doorsPosition[1][2]);
                     posEnterList.Add(posEnter);
@@ -98,6 +91,68 @@ namespace Appartment.Server
             }
         }
 
+        [EventHandler("appart:getProperties")]
+        public void GetProperties([FromSource] Player player)
+        {
+            using (var dbContext = new AppartContext())
+            {
+                List<PropertyTable> properties = dbContext.Property.ToList();
+                var propertiesList = new List<object>();
+                foreach (var property in properties)
+                {
+                    var propertyData = new
+                    {
+                        property.Id_property,
+                        property.Doors_position
+                    };
+                    propertiesList.Add(propertyData);
+                }
+
+                string jsonProperty = JsonConvert.SerializeObject(propertiesList);
+
+                TriggerClientEvent("appart:updatePropertyList", jsonProperty);
+            }
+        }
+
+        [EventHandler("appart:getApparts")]
+        public void GetApparts([FromSource] Player player)
+        {
+            using (var dbContext = new AppartContext())
+            {
+                List<AppartPlayerTable> apparts = dbContext.AppartPlayer.ToList();
+                List<PropertyTable> properties = dbContext.Property.ToList();
+                var appartsList = new List<object>();
+                var propertiesList = new List<object>();
+
+                foreach (var appart in apparts)
+                {
+                    var appartsData = new
+                    {
+                        appart.Id_player,
+                        playerName = GetPlayerName(appart.Id_player.ToString()),
+                        appart.Id_property,
+                        appart.isOpen,
+                        appart.Chest
+                    };
+                    appartsList.Add(appartsData);
+                }
+
+                foreach (var property in properties)
+                {
+                    var propertyData = new
+                    {
+                        property.Id_property,
+                        property.Doors_position
+                    };
+                    propertiesList.Add(propertyData);
+                }
+
+                string jsonProperty = JsonConvert.SerializeObject(propertiesList);
+                string jsonAppartPlayer = JsonConvert.SerializeObject(appartsList);
+
+                TriggerClientEvent("appart:updateAppartList", jsonProperty, jsonAppartPlayer);
+            }
+        }
 
     }
 }
