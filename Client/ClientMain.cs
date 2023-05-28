@@ -11,7 +11,9 @@ using LemonUI.Menus;
 using Mono.CSharp;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 using static CitizenFX.Core.Native.API;
+using static CitizenFX.Core.UI.Screen;
 
 namespace Appartment.Client
 {
@@ -21,13 +23,22 @@ namespace Appartment.Client
         List<Vector3> destPosList = new List<Vector3>();
 
         Vector3 dressPos = new Vector3(-760.7f, 325.4f, 217.0f);
+
+        Dictionary<string, object> jsonAppart = new Dictionary<string, object>();
+        Dictionary<string, object> jsonProperties = new Dictionary<string, object>();
+        string json = "";
+        string jsonProp = "";
         public ObjectPool Pool = new ObjectPool();
+
+        private bool isNoClipEnabled = false;
 
         public ClientMain()
         {
             Debug.WriteLine("Hi from Appartment.Client!");
-            RegisterCommand("appart", new Action<int, List<object>>(AppartMenu), false);
+            RegisterCommand("property", new Action<int, List<object>>(PropertyMenu), false);
             TriggerServerEvent("appart:getDoorsPositions");
+            TriggerServerEvent("appart:getApparts");
+            TriggerServerEvent("appart:getProperties");
         }
 
         [EventHandler("appart:updateStartPos")]
@@ -39,7 +50,39 @@ namespace Appartment.Client
             destPosList.AddRange(doorsExitPositionsList);
         }
 
-        public void AppartMenu(int source, List<object> args)
+        [EventHandler("appart:updateAppartList")]
+        public void UpdateAppartList(string jsonProperty, string jsonAppartPlayer)
+        {
+            List<AppartPlayerData> appartPlayerData = JsonConvert.DeserializeObject<List<AppartPlayerData>>(jsonAppartPlayer);
+
+            foreach (var appartPlayer in appartPlayerData)
+            {
+                jsonAppart["Id_property"] = appartPlayer.Id_property;
+                jsonAppart["playerName"] = appartPlayer.playerName;
+                jsonAppart["Id_player"] = appartPlayer.Id_player;
+                jsonAppart["isOpen"] = appartPlayer.isOpen;
+
+                string jsonString = JsonConvert.SerializeObject(jsonAppart);
+                json += jsonString;
+            }
+        }
+
+        [EventHandler("appart:updatePropertyList")]
+        public void UpdatePropertyList(string jsonProperty)
+        {
+            List<PropertyData> propertyData = JsonConvert.DeserializeObject<List<PropertyData>>(jsonProperty);
+
+            foreach (var property in propertyData)
+            {
+                jsonProperties["Id_property"] = property.Id_property;
+                jsonProperties["Doors_position"] = property.Doors_position;
+
+                string jsonString = JsonConvert.SerializeObject(jsonProperties);
+                jsonProp += jsonString;
+            }
+        }
+
+        public void PropertyMenu(int source, List<object> args)
         {
             var posEnter = new Vector3();
             var posExit = new Vector3();
@@ -48,7 +91,7 @@ namespace Appartment.Client
             Pool.Add(menu);
             menu.Visible = true;
 
-            var enterItem = new NativeItem("Mettre une entrée");
+            var enterItem = new NativeItem("Mettre une entrÃ©e");
             menu.Add(enterItem);
             var exitItem = new NativeItem("Mettre une sortie");
             menu.Add(exitItem);
@@ -56,15 +99,13 @@ namespace Appartment.Client
             enterItem.Activated += (sender, e) =>
             {
                 posEnter = GetEntityCoords(GetPlayerPed(-1), true);
-                SendNotif("Le point d'entrée est bien posé");
-                Debug.WriteLine($"posenter: {posEnter}");
+                SendNotif("Le point d'entrÃ©e est bien posÃ©");
             };
 
             exitItem.Activated += (sender, e) =>
             {
                 posExit = GetEntityCoords(GetPlayerPed(-1), true);
-                SendNotif("Le point de sortie est bien posé");
-                Debug.WriteLine($"posexit: {posExit}");
+                SendNotif("Le point de sortie est bien posÃ©");
             };
 
             var submit = new NativeItem("Envoyer");
@@ -73,11 +114,11 @@ namespace Appartment.Client
             {
                 if (posEnter != null && posExit != null)
                 {
-                    TriggerServerEvent("appart:addAppart", posEnter, posExit);
-                    SendNotif("Les informations ont bien été envoyé");
+                    TriggerServerEvent("appart:addProperty", posEnter, posExit);
+                    SendNotif("Les informations ont bien Ã©tÃ© envoyÃ©");
                 } else
                 {
-                    SendNotif("Vous ne pouvez pas laisser vide les points d'entrée et de sortie");
+                    SendNotif("Vous ne pouvez pas laisser vide les points d'entrÃ©e et de sortie");
                 }
             };
 
@@ -167,13 +208,23 @@ namespace Appartment.Client
          */
         public void AppartmentMenu(Vector3 position, string state)
         {
-            Dictionary<string, bool> appartItem = new Dictionary<string, bool>()
+            List<string> jsonAppartObjects = SplitJsonObjects(json);
+            List<string> jsonPropertyObjects = SplitJsonObjects(jsonProp);
+
+            List<AppartPlayerData> appartPlayerDataList = new List<AppartPlayerData>();
+            List<PropertyData> propertyDataList = new List<PropertyData>();
+
+            foreach (string jsonObject in jsonAppartObjects)
             {
-                { "a", true },
-                { "b", false },
-                { "c", true },
-                { "d", false }
-            };
+                AppartPlayerData appartPlayerData = JsonConvert.DeserializeObject<AppartPlayerData>(jsonObject);
+                appartPlayerDataList.Add(appartPlayerData);
+            }
+
+            foreach (string jsonObject in jsonPropertyObjects)
+            {
+                PropertyData propertyData = JsonConvert.DeserializeObject<PropertyData>(jsonObject);
+                propertyDataList.Add(propertyData);
+            }
 
             if (state == "enter")
             {
@@ -184,38 +235,77 @@ namespace Appartment.Client
                 menu.UseMouse = false;
                 menu.HeldTime = 100;
 
-                foreach(var item in appartItem)
-                {
-                    string stateAppart = item.Value ? "~g~Ouvert" : "~r~Fermer";
-                    string isMyAppart = "(Vous)";
-                    TriggerServerEvent("appart:getPlayerServerId", GetPlayerPed(-1));
-                    var btn = new NativeItem($"{item.Key} {isMyAppart}", "", $"{stateAppart}");
-                    menu.Add(btn);
+                bool isOpen;
+                string stateAppart;
 
-                    btn.Activated += (sender, e) => {
-                        if (item.Value == true) {
-                            menu.Visible = false;
-                            SetEntityCoords(GetPlayerPed(-1), position.X, position.Y, position.Z, true, true, true, false);
-                            TriggerServerEvent("appart:instance", item.Key, state);
-                        } else
+                foreach (PropertyData propertyData in propertyDataList)
+                {
+                    if (propertyData == null)
+                    {
+                        continue;
+                    }
+
+                    var doorsPositionList = JsonConvert.DeserializeObject<List<List<double>>>(propertyData.Doors_position);
+
+                    foreach (var doorPosition in doorsPositionList)
+                    {
+                        if (Math.Abs(doorPosition[0] - position.X) < 0.001 && Math.Abs(doorPosition[1] - position.Y) < 0.001 && Math.Abs(doorPosition[2] - position.Z) < 0.001)
                         {
-                            SendNotif("L'appartement est ~r~fermé");
+                            foreach (AppartPlayerData appartPlayerData in appartPlayerDataList)
+                            {
+                                if (appartPlayerData.Id_property == propertyData.Id_property)
+                                {
+                                    isOpen = appartPlayerData.isOpen;
+                                    stateAppart = isOpen ? "~g~Ouvert" : "~r~FermÃ©";
+
+                                    NativeItem btn;
+                                    if (appartPlayerData.playerName != null)
+                                    {
+                                        btn = new NativeItem($"Appartement NÂ°{appartPlayerData.Id_player} - {appartPlayerData.playerName}", "", $"{stateAppart}");
+                                    }
+                                    else
+                                    {
+                                        btn = new NativeItem("Ã€ louer", "", "~r~FermÃ©");
+                                        appartPlayerData.isOpen = false;
+                                    }
+
+                                    menu.Add(btn);
+
+                                    btn.Activated += (sender, e) =>
+                                    {
+                                        if (appartPlayerData.isOpen)
+                                        {
+                                            menu.Visible = false;
+                                            SetEntityCoords(GetPlayerPed(-1), position.X, position.Y, position.Z, true, true, true, false);
+                                            TriggerServerEvent("appart:instance", appartPlayerData.Id_player, state);
+                                        }
+                                        else
+                                        {
+                                            SendNotif("L'appartement est ~r~fermÃ©");
+                                        }
+                                    };
+                                }
+                            }
                         }
-                    };
+                    }
                 }
-            } else
+            }
+            else
             {
                 SetEntityCoords(GetPlayerPed(-1), position.X, position.Y, position.Z, true, true, true, false);
                 TriggerServerEvent("appart:instance", 0, state);
             }
         }
 
+
+
+
         public void DressMenu()
         {
             Game.Player.ChangeModel(new Model(PedHash.FreemodeMale01));
             SetPedComponentVariation(GetPlayerPed(-1), 8, 15, 0, 2);
             var ped = PlayerPedId();
-            var menu = new NativeMenu("Garde robe", "Choisissez vos vêtements");
+            var menu = new NativeMenu("Garde robe", "Choisissez vos vÃªtements");
             Pool.Add(menu);
             menu.Visible = true;
             menu.UseMouse = false;
@@ -331,5 +421,29 @@ namespace Appartment.Client
             }
         }
 
+        public static List<string> SplitJsonObjects(string jsonString)
+        {
+            jsonString = jsonString.Replace("}{", "}|{");
+            jsonString = jsonString.Replace("}\n{", "}\r\n{");
+            string[] jsonObjectsArray = jsonString.Split('|');
+            List<string> jsonObjectsList = new List<string>(jsonObjectsArray);
+            return jsonObjectsList;
+        }
+
+    }
+
+    public class PropertyData
+    {
+        public int Id_property { get; set; }
+        public string Doors_position { get; set; }
+    }
+
+    public class AppartPlayerData
+    {
+        public int Id_player { get; set; }
+        public string playerName { get; set; }
+        public int Id_property { get; set; }
+        public bool isOpen { get; set; }
+        public string Chest { get; set; }
     }
 }
