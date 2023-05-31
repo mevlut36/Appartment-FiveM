@@ -44,5 +44,9 @@ namespace Appartment.DataContext
         public int isOpen { get; set; }
         [Column("chest")]
         public string Chest { get; set; }
+        [Column("price")]
+        public int Price { get; set; }
+        [Column("booking")]
+        public string Booking { get; set; }
     }
 }
