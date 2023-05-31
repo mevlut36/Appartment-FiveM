@@ -9,3 +9,6 @@ Features currently available:
 - Player can reserve a appartment
 - Can enter inside
 - Wardrobe
+
+
+Todo: Burglary
