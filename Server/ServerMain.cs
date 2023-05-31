@@ -20,6 +20,11 @@ namespace Appartment.Server
             Debug.WriteLine("Hi from Appartment.Server!");
         }
 
+        /*
+         * Set a player in a instance (a dimension in the same world)
+         * 
+         * Parameter: id (instance ID), state (enter or exit)
+         */
         [EventHandler("appart:instance")]
         public void SetPlayerInInstance([FromSource] Player player, int id, string state)
         {
@@ -33,10 +38,14 @@ namespace Appartment.Server
             else
             {
                 SetPlayerRoutingBucket(player.Handle, 0);
-                Debug.WriteLine("Null, default exit");
             }
         }
 
+        /*
+         * Add a property in the database
+         * 
+         * Parameter: PosEnter, PosExit (Vector3)
+         */
         [EventHandler("appart:addProperty")]
         public void AddProperty([FromSource] Player player, Vector3 PosEnter, Vector3 PosExit)
         {
@@ -52,8 +61,13 @@ namespace Appartment.Server
             }
         }
 
+        /*
+         * Delete a property
+         * 
+         * Parameter: propertyId
+         */
         [EventHandler("appart:deleteProperty")]
-        public void DeleteAppart([FromSource] Player player, int propertyId)
+        public void DeleteProperty([FromSource] Player player, int propertyId)
         {
             using (var dbContext = new AppartContext())
             {
@@ -66,6 +80,9 @@ namespace Appartment.Server
             }
         }
 
+        /*
+         * Get all property doors
+         */
         [EventHandler("appart:getDoorsPositions")]
         public void GetDoorsPositions([FromSource] Player player)
         {
@@ -87,10 +104,13 @@ namespace Appartment.Server
                 string jsonEnterData = JsonConvert.SerializeObject(posEnterList);
                 string jsonExitData = JsonConvert.SerializeObject(posExitList);
 
-                TriggerClientEvent(player, "appart:updateStartPos", jsonEnterData, jsonExitData);
+                TriggerClientEvent(player, "appart:updateDoorsPosition", jsonEnterData, jsonExitData);
             }
         }
 
+        /*
+         * Get all properties in the database
+         */
         [EventHandler("appart:getProperties")]
         public void GetProperties([FromSource] Player player)
         {
@@ -114,6 +134,9 @@ namespace Appartment.Server
             }
         }
 
+        /*
+         * Get all appartments in the database
+         */
         [EventHandler("appart:getApparts")]
         public void GetApparts([FromSource] Player player)
         {
@@ -128,11 +151,13 @@ namespace Appartment.Server
                 {
                     var appartsData = new
                     {
-                        appart.Id_player,
-                        playerName = GetPlayerName(appart.Id_player.ToString()),
                         appart.Id_property,
+                        playerName = GetPlayerName(appart.Id_player.ToString()),
+                        appart.Id_player,
                         appart.isOpen,
-                        appart.Chest
+                        appart.Chest,
+                        appart.Price,
+                        appart.Booking
                     };
                     appartsList.Add(appartsData);
                 }
@@ -152,6 +177,37 @@ namespace Appartment.Server
 
                 TriggerClientEvent("appart:updateAppartList", jsonProperty, jsonAppartPlayer);
             }
+        }
+
+        [EventHandler("appart:getClosestPlayer")]
+        public void GetClosest([FromSource] Player player, Ped closestPedId)
+        {
+            Debug.WriteLine($"player: {player.Handle}");
+            Debug.WriteLine($"closestPedId: {closestPedId.NetworkId}");
+            //Debug.WriteLine($"GetPlayerIdentifier: {GetPlayerIdentifier(closestPedId.Handle.ToString(), closestPedId.NetworkId)}");
+        }
+
+        /*
+         * Server-side
+         * 
+         * Allows a player to reserve a appart
+         * 
+         * Adds the player's ID to the database.
+         */
+        [EventHandler("appart:bookingRequest")]
+        public void BookingRequest([FromSource] Player player)
+        {
+            using (var dbContext = new AppartContext())
+            {
+                var appartPlayer = dbContext.AppartPlayer.SingleOrDefault(a => a.Id_player.ToString() == player.Handle);
+
+                if (appartPlayer != null)
+                {
+                    appartPlayer.Booking = player.Handle;
+                    dbContext.SaveChanges();
+                }
+            }
+            TriggerClientEvent("appart:bookingRequestSuccesfull");
         }
 
     }
