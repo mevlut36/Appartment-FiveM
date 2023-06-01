@@ -60,6 +60,7 @@ DROP TABLE IF EXISTS `property`;
 CREATE TABLE IF NOT EXISTS `property` (
   `id_property` int NOT NULL AUTO_INCREMENT,
   `doors_position` varchar(255) NOT NULL,
+  `dress_position` varchar(255) NOT NULL,
   PRIMARY KEY (`id_property`)
 ) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -68,8 +69,8 @@ CREATE TABLE IF NOT EXISTS `property` (
 --
 
 INSERT INTO `property` (`id_property`, `doors_position`) VALUES
-(1, '[[-774.9777, 312.2555, 85.69809], [-783.9427, 323.7034, 212.1971]]'),
-(2, '[[-770.6283, 312.2651, 85.85048], [-774.0837, 331.1519, 207.6208]]');
+(1, '[[-774.9041, 311.9501, 86.0722], [-783.5264, 323.6873, 212.6569]]', '[-793.629,326.9281,210.9505]'),
+(2, '[[-770.6283, 312.2651, 85.85048], [-774.0837, 331.1519, 207.6208]]', '[-793.629,326.9281,210.9505]');
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
