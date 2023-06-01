@@ -7,9 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using static CitizenFX.Core.Native.API;
-using static CitizenFX.Core.UI.Screen;
 using LemonUI;
-using Mono.CSharp;
 
 namespace Appartment.Client
 {
@@ -21,6 +19,10 @@ namespace Appartment.Client
         public BaseScript BaseScript;
         public List<PropertyData> propertyData = new List<PropertyData>();
         public Dictionary<string, object> jsonProperties = new Dictionary<string, object>();
+
+        public string jsonProp = "";
+
+        
         public ClassProperty(ClientMain caller)
         {
             Pool = caller.Pool;
@@ -34,14 +36,15 @@ namespace Appartment.Client
         public void UpdatePropertyList(string jsonProperty)
         {
             propertyData = JsonConvert.DeserializeObject<List<PropertyData>>(jsonProperty);
-
+            
             foreach (var property in propertyData)
             {
                 jsonProperties["Id_property"] = property.Id_property;
                 jsonProperties["Doors_position"] = property.Doors_position;
+                jsonProperties["Dress_position"] = property.Dress_position;
 
                 string jsonString = JsonConvert.SerializeObject(jsonProperties);
-                Client.jsonProp += jsonString;
+                jsonProp += jsonString;
             }
         }
 
@@ -49,6 +52,7 @@ namespace Appartment.Client
         {
             var posPropertyEnter = new Vector3();
             var posPropertyExit = new Vector3();
+            var posDress = new Vector3();
 
             var menu = new NativeMenu("Immobilier", "Gérer les propriétés");
             Pool.Add(menu);
@@ -62,6 +66,8 @@ namespace Appartment.Client
             propertyMenu.Add(enterItem);
             var exitItem = new NativeItem("Placer une sortie");
             propertyMenu.Add(exitItem);
+            var dressItem = new NativeItem("Placer un dress");
+            propertyMenu.Add(dressItem);
             enterItem.Activated += (sender, e) =>
             {
                 posPropertyEnter = GetEntityCoords(GetPlayerPed(-1), true);
@@ -73,14 +79,19 @@ namespace Appartment.Client
                 posPropertyExit = GetEntityCoords(GetPlayerPed(-1), true);
                 Format.SendNotif("Le point de sortie est bien posé");
             };
-
+            dressItem.Activated += (sender, e) =>
+            {
+                posDress = GetEntityCoords(GetPlayerPed(-1), true);
+                Format.SendNotif("Le point de dress est bien posé");
+            };
+            
             var submit = new NativeItem("Envoyer");
             propertyMenu.Add(submit);
             submit.Activated += (sender, e) =>
             {
-                if (posPropertyEnter != null && posPropertyExit != null)
+                if (posPropertyEnter != null && posPropertyExit != null && posDress != null)
                 {
-                    BaseScript.TriggerServerEvent("appart:addProperty", posPropertyEnter, posPropertyExit);
+                    BaseScript.TriggerServerEvent("appart:addProperty", posPropertyEnter, posPropertyExit, posDress);
                     Format.SendNotif("Les informations ont bien été envoyé");
                 }
                 else
@@ -95,5 +106,6 @@ namespace Appartment.Client
     {
         public int Id_property { get; set; }
         public string Doors_position { get; set; }
+        public string Dress_position { get; set; }
     }
 }
