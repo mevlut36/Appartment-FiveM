@@ -47,13 +47,14 @@ namespace Appartment.Server
          * Parameter: PosEnter, PosExit (Vector3)
          */
         [EventHandler("appart:addProperty")]
-        public void AddProperty([FromSource] Player player, Vector3 PosEnter, Vector3 PosExit)
+        public void AddProperty([FromSource] Player player, Vector3 PosEnter, Vector3 PosExit, Vector3 PosDress)
         {
             using (var dbContext = new AppartContext())
             {
                 var newProperty = new PropertyTable
                 {
-                    Doors_position = $"[[{PosEnter.X}, {PosEnter.Y}, {PosEnter.Z}], [{PosExit.X}, {PosExit.Y}, {PosExit.Z}]]"
+                    Doors_position = $"[[{PosEnter.X}, {PosEnter.Y}, {PosEnter.Z}], [{PosExit.X}, {PosExit.Y}, {PosExit.Z}]]",
+                    Dress_position = $"[{PosDress.X},{PosDress.Y},{PosDress.Z}]"
                 };
 
                 dbContext.Property.Add(newProperty);
@@ -83,28 +84,33 @@ namespace Appartment.Server
         /*
          * Get all property doors
          */
-        [EventHandler("appart:getDoorsPositions")]
-        public void GetDoorsPositions([FromSource] Player player)
+        [EventHandler("appart:getPropertyPositions")]
+        public void GetPropertyPositions([FromSource] Player player)
         {
             using (var dbContext = new AppartContext())
             {
                 List<PropertyTable> properties = dbContext.Property.ToList();
                 List<Vector3> posEnterList = new List<Vector3>();
                 List<Vector3> posExitList = new List<Vector3>();
+                List<Vector3> posDressList = new List<Vector3>();
 
                 foreach (var property in properties)
                 {
                     var doorsPosition = JsonConvert.DeserializeObject<List<List<double>>>(property.Doors_position);
+                    var dressPosition = JsonConvert.DeserializeObject<List<double>>(property.Dress_position);
                     var posEnter = new Vector3((float)doorsPosition[0][0], (float)doorsPosition[0][1], (float)doorsPosition[0][2]);
                     var posExit = new Vector3((float)doorsPosition[1][0], (float)doorsPosition[1][1], (float)doorsPosition[1][2]);
+                    var posDress = new Vector3((float)dressPosition[0], (float)dressPosition[1], (float)dressPosition[2]);
                     posEnterList.Add(posEnter);
                     posExitList.Add(posExit);
+                    posDressList.Add(posDress);
                 }
 
                 string jsonEnterData = JsonConvert.SerializeObject(posEnterList);
                 string jsonExitData = JsonConvert.SerializeObject(posExitList);
+                string jsonDressData = JsonConvert.SerializeObject(posDressList);
 
-                TriggerClientEvent(player, "appart:updateDoorsPosition", jsonEnterData, jsonExitData);
+                TriggerClientEvent(player, "appart:updatePropertyPosition", jsonEnterData, jsonExitData, jsonDressData);
             }
         }
 
@@ -123,7 +129,8 @@ namespace Appartment.Server
                     var propertyData = new
                     {
                         property.Id_property,
-                        property.Doors_position
+                        property.Doors_position,
+                        property.Dress_position
                     };
                     propertiesList.Add(propertyData);
                 }
@@ -167,7 +174,8 @@ namespace Appartment.Server
                     var propertyData = new
                     {
                         property.Id_property,
-                        property.Doors_position
+                        property.Doors_position,
+                        property.Dress_position
                     };
                     propertiesList.Add(propertyData);
                 }
@@ -185,6 +193,13 @@ namespace Appartment.Server
             Debug.WriteLine($"player: {player.Handle}");
             Debug.WriteLine($"closestPedId: {closestPedId.NetworkId}");
             //Debug.WriteLine($"GetPlayerIdentifier: {GetPlayerIdentifier(closestPedId.Handle.ToString(), closestPedId.NetworkId)}");
+        }
+
+        [EventHandler("appart:callPolice")]
+        public void CallPolice([FromSource] Player player)
+        {
+            // For example, to remove after
+            SetPlayerWantedLevel(player.Handle, 4, false);
         }
 
         /*
