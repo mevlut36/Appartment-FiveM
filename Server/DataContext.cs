@@ -1,52 +1,75 @@
-using Microsoft.EntityFrameworkCore;
+using CitizenFX.Core;
+using LemonUI;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
+using static CitizenFX.Core.Native.API;
+using static CitizenFX.Core.UI.Screen;
 
-namespace Appartment.DataContext
+namespace Appartment.Client
 {
-    public class AppartContext : DbContext
+    public class Format
     {
-        public AppartContext()
+        public ClientMain Client;
+        public ObjectPool Pool = new ObjectPool();
+        public Format(ClientMain caller)
         {
+            Pool = caller.Pool;
+            Client = caller;
+        }
+        /*
+         * Format JSON Request from server-side
+         */
+        public static List<string> SplitJsonObjects(string jsonString)
+        {
+            jsonString = jsonString.Replace("}{", "}|{");
+            jsonString = jsonString.Replace("}\n{", "}\r\n{");
+            string[] jsonObjectsArray = jsonString.Split('|');
+            List<string> jsonObjectsList = new List<string>(jsonObjectsArray);
+            return jsonObjectsList;
         }
 
-        public DbSet<PropertyTable> Property { get; set; }
-        public DbSet<AppartPlayerTable> AppartPlayer { get; set; }
-
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        /*
+         * Notification style
+         * Parameter: Text entry
+         */
+        public void SendNotif(string text)
         {
-            optionsBuilder.UseMySql("server=localhost;database=fivem;user=root;password=");
+            BeginTextCommandThefeedPost("STRING");
+            AddTextComponentString(text);
+            EndTextCommandThefeedPostTicker(true, true);
         }
-    }
 
-    [Table("property")]
-    public class PropertyTable
-    {
-        [Key]
-        [Column("id_property")]
-        public int Id_property { get; set; }
-        [Column("doors_position")]
-        public string Doors_position { get; set; }
-    }
+        /*
+         * TextUI Style
+         * Parameter: Text entry
+         */
+        public void SendTextUI(string text)
+        {
+            SetTextFont(6);
+            SetTextScale(0.5f, 0.5f);
+            SetTextProportional(false);
+            SetTextEdge(1, 0, 0, 0, 255);
+            SetTextDropShadow();
+            SetTextOutline();
+            SetTextCentre(false);
+            SetTextJustification(0);
+            SetTextEntry("STRING");
+            AddTextComponentString($"{text}");
+            int x = 0, y = 0;
+            GetScreenActiveResolution(ref x, ref y);
+            DrawText(0.50f, 0.80f);
+        }
 
-    [Table("appart_player")]
-    public class AppartPlayerTable
-    {
-        [Key]
-        [Column("id_player")]
-        public int Id_player { get; set; }
-        [Column("id_property")]
-        public int Id_property { get; set; } // Cle etrangere avec la colonne id_property de la table property
-        [Column("isOpen")]
-        public int isOpen { get; set; }
-        [Column("chest")]
-        public string Chest { get; set; }
-        [Column("price")]
-        public int Price { get; set; }
-        [Column("booking")]
-        public string Booking { get; set; }
+        /*
+         * Create a quoicouMarker
+         * Parameter : position type Vector3    
+         */
+        public void SetMarker(Vector3 position, MarkerType markerType)
+        {
+            World.DrawMarker(markerType, position, Vector3.Zero, Vector3.Zero, new Vector3(1, 1, 1), System.Drawing.Color.FromArgb(255, 130, 0), true);
+        }
     }
 }
