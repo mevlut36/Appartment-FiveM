@@ -20,38 +20,43 @@ namespace Appartment.Client
     {
         public Format Format;
         public ClassProperty Property;
-        List<Vector3> startPosList = new List<Vector3>();
-        List<Vector3> destPosList = new List<Vector3>();
+        public ClassBurglary Burglary;
 
         Vector3 dressPos = new Vector3(-760.7f, 325.4f, 217.0f);
 
         Dictionary<string, object> jsonAppart = new Dictionary<string, object>();
         string json = "";
-        public string jsonProp = "";
         private string inputText;
         bool InputEntry = false;
         private int keyboardState = -1;
         public ObjectPool Pool = new ObjectPool();
+
+        public List<Vector3> EnterPosList = new List<Vector3>();
+        public List<Vector3> DestPosList = new List<Vector3>();
+        public List<Vector3> DressPosList = new List<Vector3>();
 
         public ClientMain()
         {
             Debug.WriteLine("Hi from Appartment.Client!");
             Format = new Format(this);
             Property = new ClassProperty(this);
-            TriggerServerEvent("appart:getDoorsPositions");
+            Burglary = new ClassBurglary(this);
+            TriggerServerEvent("appart:getPropertyPositions");
             TriggerServerEvent("appart:getApparts");
         }
 
-        public void AddEvent(string key, System.Delegate value) => this.EventHandlers.Add(key, value);
-
-        [EventHandler("appart:updateDoorsPosition")]
-        public void UpdateDoorsPosition(string posEnterArray, string posExitArray)
+        [EventHandler("appart:updatePropertyPosition")]
+        public void UpdatePropertyPosition(string posEnterArray, string posExitArray, string posDressArray)
         {
             List<Vector3> doorsEnterPositionsList = JsonConvert.DeserializeObject<List<Vector3>>(posEnterArray);
             List<Vector3> doorsExitPositionsList = JsonConvert.DeserializeObject<List<Vector3>>(posExitArray);
-            startPosList.AddRange(doorsEnterPositionsList);
-            destPosList.AddRange(doorsExitPositionsList);
+            List<Vector3> doorsDressPositionsList = JsonConvert.DeserializeObject<List<Vector3>>(posDressArray);
+            EnterPosList.AddRange(doorsEnterPositionsList);
+            DestPosList.AddRange(doorsExitPositionsList);
+            DressPosList.AddRange(doorsDressPositionsList);
         }
+
+        public void AddEvent(string key, System.Delegate value) => this.EventHandlers.Add(key, value);
 
         [EventHandler("appart:updateAppartList")]
         public void UpdateAppartList(string jsonPropertyPlayer, string jsonAppartPlayer)
@@ -141,22 +146,13 @@ namespace Appartment.Client
             }
         }
 
-        public async void TestDance()
-        {
-            Function.Call(Hash.REQUEST_ANIM_DICT, "special_ped@mountain_dancer@base");
-            while (!Function.Call<bool>(Hash.HAS_ANIM_DICT_LOADED, "special_ped@mountain_dancer@base")) await Delay(50);
-            Game.PlayerPed.Task.ClearAllImmediately();
-            AnimationFlags flags = AnimationFlags.Loop | AnimationFlags.CancelableWithMovement;
-            Game.PlayerPed.Task.PlayAnimation("special_ped@mountain_dancer@base", "base", -1, -1, flags);
-        }
-
         /*
          * Open a menu with apparts
          */
         public void AppartmentMenu(Vector3 position, string state)
         {
             List<string> jsonAppartObjects = Format.SplitJsonObjects(json);
-            List<string> jsonPropertyObjects = Format.SplitJsonObjects(jsonProp);
+            List<string> jsonPropertyObjects = Format.SplitJsonObjects(Property.jsonProp);
 
             List<AppartPlayerData> appartPlayerDataList = new List<AppartPlayerData>();
             List<PropertyData> propertyDataList = new List<PropertyData>();
@@ -164,7 +160,6 @@ namespace Appartment.Client
             {
                 AppartPlayerData appartPlayerData = JsonConvert.DeserializeObject<AppartPlayerData>(jsonObject);
                 appartPlayerDataList.Add(appartPlayerData);
-                
             }
 
             foreach (string jsonObject in jsonPropertyObjects)
@@ -187,7 +182,7 @@ namespace Appartment.Client
                 TriggerServerEvent("appart:bookingRequest");
             };
 
-            // If Appartment is OPEN
+            // If Appartment is ENTER
             if (state == "enter")
             {
                 bool isOpen;
@@ -248,12 +243,33 @@ namespace Appartment.Client
                     }
                 }
             }
-            // If Appartment is CLOSE
+            // If Appartment is EXIT
             else
             {
                 SetEntityCoords(GetPlayerPed(-1), position.X, position.Y, position.Z, true, true, true, false);
                 TriggerServerEvent("appart:instance", 0, state);
+                Burglary.IsBurglarising = false;
             }
+
+            int activationBurglaryCount = 0;
+
+            var testBurglary = new NativeItem("Appart à cambrioler");
+            menu.Add(testBurglary);
+
+            testBurglary.Activated += (sender, e) =>
+            {
+                activationBurglaryCount++;
+
+                if (activationBurglaryCount == 3)
+                {
+                    Burglary.StartBurglary();
+                }
+                else if (activationBurglaryCount > 3)
+                {
+                    activationBurglaryCount = 1;
+                }
+            };
+
 
             var appartMenu = new NativeMenu("Appartement", "Créer un appartment (ADMIN)");
             Pool.Add(appartMenu);
@@ -354,9 +370,9 @@ namespace Appartment.Client
         {
             Pool.Process();
             Vector3 playerPos = LocalPlayer.Character.Position;
-            CheckAndTeleport(playerPos, startPosList, destPosList, "rentrer", "enter");
-            CheckAndTeleport(playerPos, destPosList, startPosList, "sortir", "exit");
-            CheckDress(playerPos, dressPos);
+            CheckAndTeleport(playerPos, EnterPosList, DestPosList, "rentrer", "enter");
+            CheckAndTeleport(playerPos, DestPosList, EnterPosList, "sortir", "exit");
+            CheckDress(playerPos, DressPosList);
 
             if (InputEntry)
             {
@@ -380,6 +396,8 @@ namespace Appartment.Client
                     InputEntry = false;
                 }
             }
+
+            Burglary.OnTick();
             return Task.FromResult(0);
         }
 
@@ -401,12 +419,16 @@ namespace Appartment.Client
             }
         }
 
-        private void CheckDress(Vector3 playerPos, Vector3 pointPos)
+        private void CheckDress(Vector3 playerPos, List<Vector3> pointListPos)
         {
-            var distPoint = playerPos.DistanceToSquared2D(pointPos);
-            if (distPoint <= 50)
+            for (int i = 0; i < pointListPos.Count; i++)
             {
-                DressPoint(pointPos);
+                var pointPos = pointListPos[i];
+                var distPoint = playerPos.DistanceToSquared2D(pointPos);
+                if (distPoint <= 50)
+                {
+                    DressPoint(pointPos);
+                }
             }
         }
     }
